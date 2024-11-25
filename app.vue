@@ -1,16 +1,26 @@
 <script setup lang="ts">
-const { data: todos, status, error, refresh } = await useFetch("/api/todos");
+const {
+  todos,
+  errorMessage,
+  isLoading,
+  readTodos,
+  createTodo,
+  updateTodo,
+  deleteTodo,
+} = useTodos();
 
 const newTodoTitle = ref("");
-const pendingOrIdle = computed(() => status.value in ["pending", "idle"]);
-
 const todoIdInEdit = ref<number | null>(null);
 const todoTitleInEdit = ref<string | null>(null);
+
+onMounted(async () => {
+  await readTodos();
+});
 
 function startEdit(id: number, title: string) {
   todoIdInEdit.value = id;
   todoTitleInEdit.value = title;
-};
+}
 
 function cancelEdit() {
   todoIdInEdit.value = null;
@@ -40,64 +50,38 @@ onUnmounted(() => {
   document.removeEventListener("click", handleClickOutside);
 });
 
-async function updateTodo(id: number) {
+async function saveTodo() {
   if (!todoTitleInEdit.value?.trim()) {
     alert("タイトルを入力してください。");
     return;
   }
 
-  try {
-    await useFetch(`/api/todos/${id}`, {
-      method: "PATCH",
-      body: { title: todoTitleInEdit.value },
-    });
+  if (todoIdInEdit.value !== null) {
+    try {
+      await updateTodo(todoIdInEdit.value, todoTitleInEdit.value, false);
 
-    await refresh();
-    cancelEdit();
-  }
-  catch (error) {
-    console.error("Todo の更新に失敗しました。", error);
-    alert("Todo の更新に失敗しました。");
+      const index = todos.value.findIndex(todo => todo.id === todoIdInEdit.value);
+      if (index !== -1) {
+        todos.value[index].title = todoTitleInEdit.value;
+      }
+
+      cancelEdit();
+    }
+    catch (errorMessage) {
+      console.error("Todo の更新に失敗しました。", errorMessage);
+      alert("Todo の更新に失敗しました。");
+    }
   }
 }
 
-async function createTodo() {
+async function addTodo() {
   if (!newTodoTitle.value.trim()) {
     alert("タイトルを入力してください");
     return;
   }
 
-  try {
-    const { data: createdTodo } = await useFetch("/api/todos", {
-      method: "POST",
-      body: { title: newTodoTitle.value },
-    });
-
-    if (createdTodo.value) {
-      todos.value = [...(todos.value || []), createdTodo.value];
-    }
-    newTodoTitle.value = "";
-    refresh();
-  }
-  catch (err) {
-    alert("Todoの作成に失敗しました");
-    console.error(err);
-  }
-};
-
-async function deleteTodo(id: number) {
-  try {
-    await useFetch(`/api/todos/${id}`, {
-      method: "DELETE",
-    });
-
-    await refresh();
-    cancelEdit();
-  }
-  catch (error) {
-    console.error("Todo の更新に失敗しました。", error);
-    alert("Todo の更新に失敗しました。");
-  }
+  await createTodo(newTodoTitle.value);
+  newTodoTitle.value = "";
 }
 </script>
 
@@ -113,11 +97,11 @@ async function deleteTodo(id: number) {
       Todos
     </h1>
 
-    <div v-if="pendingOrIdle">
+    <div v-if="isLoading">
       Loading...
     </div>
-    <div v-else-if="error">
-      Error: {{ error.message }}
+    <div v-else-if="errorMessage">
+      Error: {{ errorMessage }}
     </div>
     <ul
       v-else
@@ -153,7 +137,7 @@ async function deleteTodo(id: number) {
             text-white
             rounded
             hover:bg-green-500
-            @click="updateTodo(todo.id)"
+            @click="saveTodo"
           >
             保存
           </button>
@@ -189,7 +173,7 @@ async function deleteTodo(id: number) {
         <form
           flex
           gap-4
-          @submit.prevent="createTodo"
+          @submit.prevent="addTodo"
         >
           <input
             v-model="newTodoTitle"
