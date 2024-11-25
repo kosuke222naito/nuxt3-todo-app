@@ -12,19 +12,22 @@ const {
 const newTodoTitle = ref("");
 const todoIdInEdit = ref<number | null>(null);
 const todoTitleInEdit = ref<string | null>(null);
+const todoDoneInEdit = ref<boolean | null>(null);
 
 onMounted(async () => {
   await readTodos();
 });
 
-function startEdit(id: number, title: string) {
+function startEdit(id: number, title: string, done: boolean) {
   todoIdInEdit.value = id;
   todoTitleInEdit.value = title;
+  todoDoneInEdit.value = done;
 }
 
 function cancelEdit() {
   todoIdInEdit.value = null;
   todoTitleInEdit.value = null;
+  todoDoneInEdit.value = null;
 }
 
 const handleKeydown = (event: KeyboardEvent) => {
@@ -71,6 +74,20 @@ async function saveTodo() {
       console.error("Todo の更新に失敗しました。", errorMessage);
       alert("Todo の更新に失敗しました。");
     }
+  }
+}
+
+async function toggleDone(id: number, done: boolean) {
+  try {
+    await updateTodo(id, "", !done);
+    const index = todos.value.findIndex(todo => todo.id === id);
+    if (index === -1) {
+      todos.value[index].done = !done;
+    }
+  }
+  catch (errorMessage) {
+    console.error("Todo の状態切り替えに失敗しました。", errorMessage);
+    alert("Todo の状態切り替えに失敗しました。");
   }
 }
 
@@ -122,6 +139,13 @@ async function addTodo() {
           class="todo-edit"
         >
           <input
+            v-model="todo.done"
+            type="checkbox"
+            w-6
+            h-6
+            @change="toggleDone(todo.id, todo.done)"
+          >
+          <input
             v-model="todoTitleInEdit"
             type="text"
             text-green
@@ -142,17 +166,26 @@ async function addTodo() {
             保存
           </button>
         </div>
-
         <div
           v-else
           flex
           gap-4
         >
+          <input
+            v-model="todo.done"
+            type="checkbox"
+            w-6
+
+            @change="toggleDone(todo.id, todo.done)"
+          >
           <span
             flex-1
             max-w-xs
-            @dblclick="startEdit(todo.id, todo.title)"
-          >{{ todo.title }}</span>
+            :class="{ 'line-through decoration-green': todo.done }"
+            @dblclick="startEdit(todo.id, todo.title, todo.done)"
+          >
+            {{ todo.title }}
+          </span>
           <button
             type="button"
             p-2
